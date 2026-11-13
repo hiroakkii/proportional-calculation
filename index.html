@@ -65,6 +65,11 @@
   .ratio { flex-wrap: nowrap; }
   .remove { border: 0; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }
   .add { margin-top: 8px; border: 1px dashed var(--line); background: none; color: var(--accent); padding: 8px; border-radius: 8px; font: inherit; cursor: pointer; width: 100%; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .suffix { display: flex; align-items: center; gap: 6px; }
+  .suffix span { color: var(--muted); }
+  select.unit { width: 100%; padding: 10px 12px; font: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+  .result .sub { display: block; color: var(--muted); font-size: .85rem; font-weight: 400; }
   .precision { margin-top: 20px; font-size: .9rem; color: var(--muted); display: flex; align-items: center; gap: 8px; }
   .precision select { font: inherit; padding: 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
 </style>
@@ -72,16 +77,57 @@
 <body>
 <main>
   <h1>比例計算</h1>
-  <p class="lead">比例式・比例配分・反比例をかんたんに計算できます。</p>
+  <p class="lead">濃縮調味料の換算や、比例式・比例配分・反比例をかんたんに計算できます。</p>
 
   <div class="tabs" role="tablist">
-    <button role="tab" aria-selected="true" data-tab="ratio">比例式</button>
+    <button role="tab" aria-selected="true" data-tab="dilute">濃縮換算</button>
+    <button role="tab" aria-selected="false" data-tab="ratio">比例式</button>
     <button role="tab" aria-selected="false" data-tab="split">比例配分</button>
     <button role="tab" aria-selected="false" data-tab="inverse">反比例</button>
   </div>
 
+  <!-- 濃縮換算 -->
+  <section class="card" id="tab-dilute">
+    <p class="hint">レシピと違う倍率の濃縮調味料（めんつゆ・白だしなど）を使うときの量を計算します。<br>（例：3倍濃縮 100ml のレシピを 5倍濃縮で作る）</p>
+    <div class="grid2">
+      <div class="field">
+        <label for="d-recipe-x">レシピの濃縮倍率</label>
+        <div class="suffix"><input id="d-recipe-x" inputmode="decimal" placeholder="例: 3"><span>倍</span></div>
+      </div>
+      <div class="field">
+        <label for="d-own-x">手持ちの濃縮倍率</label>
+        <div class="suffix"><input id="d-own-x" inputmode="decimal" placeholder="例: 5"><span>倍</span></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label for="d-amount">調味料の量</label>
+        <input id="d-amount" inputmode="decimal" placeholder="例: 100">
+      </div>
+      <div class="field">
+        <label for="d-water">水の量（任意）</label>
+        <input id="d-water" inputmode="decimal" placeholder="例: 200">
+      </div>
+    </div>
+    <div class="field">
+      <label for="d-unit">単位</label>
+      <select id="d-unit" class="unit">
+        <option value="ml">ml</option>
+        <option value="大さじ">大さじ</option>
+        <option value="小さじ">小さじ</option>
+        <option value="カップ">カップ</option>
+        <option value="g">g</option>
+      </select>
+    </div>
+    <div class="actions">
+      <button class="primary" id="dilute-calc">計算する</button>
+      <button id="dilute-clear">クリア</button>
+    </div>
+    <div class="result" id="dilute-result" aria-live="polite"></div>
+  </section>
+
   <!-- 比例式 -->
-  <section class="card" id="tab-ratio">
+  <section class="card" id="tab-ratio" hidden>
     <p class="hint">A : B = C : D のうち、<strong>3つ</strong>を入力すると残りの1つを求めます。</p>
     <div class="row ratio">
       <input id="ra" inputmode="decimal" placeholder="A" aria-label="A">
@@ -138,8 +184,8 @@
   <div class="precision">
     <label for="digits" style="margin:0">小数点以下の桁数</label>
     <select id="digits">
-      <option value="0">0</option><option value="1">1</option><option value="2">2</option>
-      <option value="3">3</option><option value="4" selected>4</option><option value="6">6</option>
+      <option value="0">0</option><option value="1">1</option><option value="2" selected>2</option>
+      <option value="3">3</option><option value="4">4</option><option value="6">6</option>
     </select>
   </div>
 </main>
@@ -231,6 +277,61 @@
   $('ratio-clear').onclick = () => clear(ratioIds, 'ratio-result');
   $('inverse-calc').onclick = () => solveFour(inverseIds, 'inverse-result', inverseSolver);
   $('inverse-clear').onclick = () => clear(inverseIds, 'inverse-result');
+
+  // ---- 濃縮換算 ----
+  // 原液に含まれる「濃さ」は 量 × 倍率 で一定 → 手持ちの量 = レシピの量 × レシピ倍率 ÷ 手持ち倍率
+  // 出来上がりの総量を揃えるため、減った（増えた）分を水で調整する
+  const ML = { ml: 1, '大さじ': 15, '小さじ': 5, 'カップ': 200 };
+  function spoons(ml) {
+    // 料理で使いやすい目安（大さじ・小さじ）
+    const tbsp = Math.floor(ml / 15 + 1e-9);
+    const tsp = Math.round((ml - tbsp * 15) / 5 * 2) / 2;   // 小さじ 1/2 単位
+    const parts = [];
+    if (tbsp) parts.push(`大さじ${tbsp}`);
+    if (tsp) parts.push(`小さじ${tsp}`);
+    return parts.length ? parts.join(' + ') : '少々';
+  }
+  $('dilute-calc').onclick = () => {
+    const res = $('dilute-result');
+    const rx = parse($('d-recipe-x').value), ox = parse($('d-own-x').value);
+    const amt = parse($('d-amount').value), water = parse($('d-water').value);
+    const unit = $('d-unit').value;
+    if ([rx, ox, amt].some(v => v === null)) return showError(res, '濃縮倍率（2つ）と調味料の量を入力してください。');
+    if ([rx, ox, amt, water].some(v => Number.isNaN(v))) return showError(res, '数値として読み取れない入力があります。');
+    if (rx <= 0 || ox <= 0) return showError(res, '濃縮倍率は0より大きい数値を入力してください。（ストレートは 1倍）');
+    if (amt < 0 || (water !== null && water < 0)) return showError(res, '量には0以上の数値を入力してください。');
+
+    const own = amt * rx / ox;
+    const diff = amt - own;                       // 正: 水を足す / 負: 水を減らす
+    const newWater = water === null ? null : water + diff;
+    const u = unit;
+    const hint = v => {
+      if (!(u in ML) || v <= 0 || v * ML[u] > 60) return '';
+      const s = spoons(v * ML[u]);
+      return s === `${u}${fmt(v)}` ? '' : ` <span class="sub">（約 ${s}）</span>`;
+    };
+
+    let html = `<div class="answer">手持ちの調味料：${fmt(own)} ${u}${hint(own)}</div>`;
+    if (newWater !== null) {
+      if (newWater < 0) {
+        html += `<div class="answer">水：0 ${u}</div><div class="sub">※ 手持ちの濃縮倍率が低いため、水を入れなくても出来上がりがレシピより ${fmt(-newWater)} ${u} 多くなります（味の濃さは同じです）。</div>`;
+      } else {
+        html += `<div class="answer">水：${fmt(newWater)} ${u}${hint(newWater)}</div>`;
+      }
+    } else if (diff > 0) {
+      html += `<div class="answer">＋ 水：${fmt(diff)} ${u}${hint(diff)}</div>`;
+    } else if (diff < 0) {
+      html += `<div class="answer">水を ${fmt(-diff)} ${u} 減らす${hint(-diff)}</div>`;
+    }
+    let steps = `手持ちの量 = ${fmt(amt)} × ${fmt(rx)} ÷ ${fmt(ox)} = ${fmt(own)} ${u}`;
+    if (diff !== 0) steps += `\n水の調整 = ${fmt(amt)} − ${fmt(own)} = ${fmt(diff)} ${u}（出来上がりの量と濃さをレシピに合わせる）`;
+    if (newWater !== null && diff !== 0) steps += `\n水の量 = ${fmt(water)} ${diff >= 0 ? '+' : '−'} ${fmt(Math.abs(diff))} = ${fmt(newWater)} ${u}`;
+    showResult(res, html + `<div class="steps">${steps}</div>`);
+  };
+  $('dilute-clear').onclick = () => {
+    ['d-recipe-x', 'd-own-x', 'd-amount', 'd-water'].forEach(id => $(id).value = '');
+    $('dilute-result').textContent = ''; $('d-recipe-x').focus();
+  };
 
   // ---- 比例配分 ----
   const parts = $('parts');
