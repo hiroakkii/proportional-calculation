@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>比例計算</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7385;
+    --line: #dde1e8; --accent: #2f6fde; --accent-soft: #e8f0fd; --error: #c9372c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c; --card: #1e232b; --text: #e8ebf0; --muted: #9aa3b2;
+      --line: #333a46; --accent: #6b9cf5; --accent-soft: #23314a; --error: #f07167;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    line-height: 1.6;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 20px; font-size: .95rem; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+  .tabs button {
+    flex: 1; padding: 10px 8px; border: 0; background: none; color: var(--muted);
+    font: inherit; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent;
+  }
+  .tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .card[hidden] { display: none; }
+  .hint { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .row .op { font-size: 1.3rem; font-weight: 700; color: var(--muted); }
+  input {
+    width: 100%; padding: 10px 12px; font: inherit; font-size: 1.1rem;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input.solved { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
+  .ratio input { flex: 1; min-width: 0; width: auto; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 4px; }
+  .field { margin-bottom: 14px; }
+  .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .actions button {
+    padding: 10px 18px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+  }
+  .actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .result { margin-top: 18px; padding: 14px 16px; border-radius: 8px; background: var(--accent-soft); }
+  .result:empty { display: none; }
+  .result.error { background: transparent; border: 1px solid var(--error); color: var(--error); }
+  .result .answer { font-size: 1.3rem; font-weight: 700; }
+  .result .steps { margin: 8px 0 0; font-size: .9rem; color: var(--muted); font-family: ui-monospace, monospace; white-space: pre-wrap; }
+  .result table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  .result td { padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .result td:last-child { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .parts { display: flex; flex-direction: column; gap: 8px; }
+  .parts .row { flex-wrap: nowrap; }
+  .parts .row input { flex: 2; width: auto; min-width: 0; }
+  .parts .row input.pratio { flex: 1; }
+  .ratio { flex-wrap: nowrap; }
+  .remove { border: 0; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }
+  .add { margin-top: 8px; border: 1px dashed var(--line); background: none; color: var(--accent); padding: 8px; border-radius: 8px; font: inherit; cursor: pointer; width: 100%; }
+  .precision { margin-top: 20px; font-size: .9rem; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .precision select { font: inherit; padding: 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>比例計算</h1>
+  <p class="lead">比例式・比例配分・反比例をかんたんに計算できます。</p>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="ratio">比例式</button>
+    <button role="tab" aria-selected="false" data-tab="split">比例配分</button>
+    <button role="tab" aria-selected="false" data-tab="inverse">反比例</button>
+  </div>
+
+  <!-- 比例式 -->
+  <section class="card" id="tab-ratio">
+    <p class="hint">A : B = C : D のうち、<strong>3つ</strong>を入力すると残りの1つを求めます。</p>
+    <div class="row ratio">
+      <input id="ra" inputmode="decimal" placeholder="A" aria-label="A">
+      <span class="op">:</span>
+      <input id="rb" inputmode="decimal" placeholder="B" aria-label="B">
+      <span class="op">=</span>
+      <input id="rc" inputmode="decimal" placeholder="C" aria-label="C">
+      <span class="op">:</span>
+      <input id="rd" inputmode="decimal" placeholder="D" aria-label="D">
+    </div>
+    <div class="actions">
+      <button class="primary" id="ratio-calc">計算する</button>
+      <button id="ratio-clear">クリア</button>
+    </div>
+    <div class="result" id="ratio-result" aria-live="polite"></div>
+  </section>
+
+  <!-- 比例配分 -->
+  <section class="card" id="tab-split" hidden>
+    <p class="hint">合計を指定した比で分けます。（例：1200円を 2 : 3 : 5 で分ける）</p>
+    <div class="field">
+      <label for="total">合計</label>
+      <input id="total" inputmode="decimal" placeholder="例: 1200">
+    </div>
+    <label>比</label>
+    <div class="parts" id="parts"></div>
+    <button class="add" id="add-part">＋ 項目を追加</button>
+    <div class="actions">
+      <button class="primary" id="split-calc">計算する</button>
+      <button id="split-clear">クリア</button>
+    </div>
+    <div class="result" id="split-result" aria-live="polite"></div>
+  </section>
+
+  <!-- 反比例 -->
+  <section class="card" id="tab-inverse" hidden>
+    <p class="hint">x × y = 一定 のとき、x₁ × y₁ = x₂ × y₂ のうち<strong>3つ</strong>を入力すると残りを求めます。（例：4人で6日かかる仕事を3人でやると？）</p>
+    <div class="row ratio">
+      <input id="ix1" inputmode="decimal" placeholder="x₁" aria-label="x1">
+      <span class="op">×</span>
+      <input id="iy1" inputmode="decimal" placeholder="y₁" aria-label="y1">
+      <span class="op">=</span>
+      <input id="ix2" inputmode="decimal" placeholder="x₂" aria-label="x2">
+      <span class="op">×</span>
+      <input id="iy2" inputmode="decimal" placeholder="y₂" aria-label="y2">
+    </div>
+    <div class="actions">
+      <button class="primary" id="inverse-calc">計算する</button>
+      <button id="inverse-clear">クリア</button>
+    </div>
+    <div class="result" id="inverse-result" aria-live="polite"></div>
+  </section>
+
+  <div class="precision">
+    <label for="digits" style="margin:0">小数点以下の桁数</label>
+    <select id="digits">
+      <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+      <option value="3">3</option><option value="4" selected>4</option><option value="6">6</option>
+    </select>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ---- 共通 ----
+  const digits = () => Number($('digits').value);
+  function fmt(n) {
+    const d = digits();
+    const r = Math.round(n * 10 ** d) / 10 ** d;
+    return (Object.is(r, -0) ? 0 : r).toLocaleString('ja-JP', { maximumFractionDigits: d });
+  }
+  // 全角数字・カンマを許容して数値化。空欄は null、不正は NaN
+  function parse(v) {
+    v = v.trim().replace(/[０-９．－]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/,/g, '');
+    if (v === '') return null;
+    if (!/^-?(\d+\.?\d*|\.\d+)$/.test(v)) return NaN;
+    return Number(v);
+  }
+  function showError(el, msg) { el.className = 'result error'; el.textContent = msg; }
+  function showResult(el, html) { el.className = 'result'; el.innerHTML = html; }
+  function clear(ids, resultId) {
+    ids.forEach(id => { $(id).value = ''; $(id).classList.remove('solved'); });
+    $(resultId).textContent = '';
+    $(ids[0]).focus();
+  }
+
+  // ---- タブ ----
+  document.querySelectorAll('.tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b === btn));
+      document.querySelectorAll('main > .card').forEach(c => c.hidden = c.id !== 'tab-' + btn.dataset.tab);
+    });
+  });
+
+  // ---- 4つの値のうち1つを解く（比例式・反比例共通） ----
+  function solveFour(ids, resultId, solver) {
+    const res = $(resultId);
+    ids.forEach(id => { if ($(id).classList.contains('solved')) { $(id).value = ''; $(id).classList.remove('solved'); } });
+    const vals = ids.map(id => parse($(id).value));
+    if (vals.some(v => Number.isNaN(v))) return showError(res, '数値として読み取れない入力があります。');
+    const blanks = vals.map((v, i) => v === null ? i : -1).filter(i => i >= 0);
+    if (blanks.length !== 1) return showError(res, '4つのうち、ちょうど3つを入力して1つを空欄にしてください。');
+    const out = solver(vals, blanks[0]);
+    if (out.error) return showError(res, out.error);
+    const input = $(ids[blanks[0]]);
+    input.value = fmt(out.value);
+    input.classList.add('solved');
+    showResult(res, `<div class="answer">${out.label} = ${fmt(out.value)}</div><div class="steps">${out.steps}</div>`);
+  }
+
+  // A : B = C : D  ⇔  A × D = B × C
+  function ratioSolver([a, b, c, d], i) {
+    const names = ['A', 'B', 'C', 'D'];
+    const f = fmt;
+    let value, steps;
+    switch (i) {
+      case 0: if (d === 0) return { error: 'D が 0 のため計算できません。' };
+        value = b * c / d; steps = `A × ${f(d)} = ${f(b)} × ${f(c)}\nA = ${f(b)} × ${f(c)} ÷ ${f(d)}`; break;
+      case 1: if (c === 0) return { error: 'C が 0 のため計算できません。' };
+        value = a * d / c; steps = `${f(a)} × ${f(d)} = B × ${f(c)}\nB = ${f(a)} × ${f(d)} ÷ ${f(c)}`; break;
+      case 2: if (b === 0) return { error: 'B が 0 のため計算できません。' };
+        value = a * d / b; steps = `${f(a)} × ${f(d)} = ${f(b)} × C\nC = ${f(a)} × ${f(d)} ÷ ${f(b)}`; break;
+      case 3: if (a === 0) return { error: 'A が 0 のため計算できません。' };
+        value = b * c / a; steps = `${f(a)} × D = ${f(b)} × ${f(c)}\nD = ${f(b)} × ${f(c)} ÷ ${f(a)}`; break;
+    }
+    return { label: names[i], value, steps: '内項の積 = 外項の積 より\n' + steps };
+  }
+
+  // x1 × y1 = x2 × y2
+  function inverseSolver(vals, i) {
+    const names = ['x₁', 'y₁', 'x₂', 'y₂'];
+    const pair = i < 2 ? [2, 3] : [0, 1];      // 既知のペア
+    const partner = i ^ 1;                     // 同じ辺のもう一方
+    if (vals[partner] === 0) return { error: `${names[partner]} が 0 のため計算できません。` };
+    const k = vals[pair[0]] * vals[pair[1]];
+    const value = k / vals[partner];
+    const steps = `比例定数 k = ${names[pair[0]]} × ${names[pair[1]]} = ${fmt(vals[pair[0]])} × ${fmt(vals[pair[1]])} = ${fmt(k)}\n`
+      + `${names[i]} = k ÷ ${names[partner]} = ${fmt(k)} ÷ ${fmt(vals[partner])}`;
+    return { label: names[i], value, steps };
+  }
+
+  const ratioIds = ['ra', 'rb', 'rc', 'rd'];
+  const inverseIds = ['ix1', 'iy1', 'ix2', 'iy2'];
+  $('ratio-calc').onclick = () => solveFour(ratioIds, 'ratio-result', ratioSolver);
+  $('ratio-clear').onclick = () => clear(ratioIds, 'ratio-result');
+  $('inverse-calc').onclick = () => solveFour(inverseIds, 'inverse-result', inverseSolver);
+  $('inverse-clear').onclick = () => clear(inverseIds, 'inverse-result');
+
+  // ---- 比例配分 ----
+  const parts = $('parts');
+  let partCount = 0;
+  function addPart(name = '', ratio = '') {
+    partCount++;
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<input class="pname" placeholder="名前（任意）" aria-label="名前">
+      <input class="pratio" inputmode="decimal" placeholder="比" aria-label="比">
+      <button class="remove" aria-label="削除" title="削除">×</button>`;
+    row.querySelector('.pname').value = name;
+    row.querySelector('.pratio').value = ratio;
+    row.querySelector('.remove').onclick = () => {
+      if (parts.children.length > 2) row.remove();
+    };
+    parts.appendChild(row);
+  }
+  addPart(); addPart();
+  $('add-part').onclick = () => { addPart(); parts.lastChild.querySelector('.pratio').focus(); };
+
+  $('split-calc').onclick = () => {
+    const res = $('split-result');
+    const total = parse($('total').value);
+    if (total === null || Number.isNaN(total)) return showError(res, '合計を数値で入力してください。');
+    const rows = [...parts.children].map((r, i) => ({
+      name: r.querySelector('.pname').value.trim() || `項目${i + 1}`,
+      ratio: parse(r.querySelector('.pratio').value),
+    })).filter(r => r.ratio !== null);
+    if (rows.length < 2) return showError(res, '比を2つ以上入力してください。');
+    if (rows.some(r => Number.isNaN(r.ratio) || r.ratio < 0)) return showError(res, '比には0以上の数値を入力してください。');
+    const sum = rows.reduce((s, r) => s + r.ratio, 0);
+    if (sum === 0) return showError(res, '比の合計が0です。');
+    const body = rows.map(r =>
+      `<tr><td>${escapeHtml(r.name)}（${fmt(r.ratio)}）</td><td>${fmt(total * r.ratio / sum)}</td></tr>`).join('');
+    showResult(res, `<table>${body}</table><div class="steps">比の合計 = ${rows.map(r => fmt(r.ratio)).join(' + ')} = ${fmt(sum)}\n各値 = ${fmt(total)} × 比 ÷ ${fmt(sum)}</div>`);
+  };
+  $('split-clear').onclick = () => {
+    $('total').value = ''; parts.innerHTML = ''; addPart(); addPart();
+    $('split-result').textContent = ''; $('total').focus();
+  };
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // Enter で計算
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+    const card = e.target.closest('.card');
+    card && card.querySelector('.primary').click();
+  });
+})();
+</script>
+</body>
+</html>
