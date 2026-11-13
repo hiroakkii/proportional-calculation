@@ -74,6 +74,21 @@
   .row.three { flex-wrap: nowrap; align-items: flex-end; }
   .row.three .field { flex: 1; min-width: 0; margin-bottom: 0; }
   .row.three .op { padding-bottom: 10px; }
+  .history { margin-top: 24px; }
+  .history-head { display: flex; align-items: center; justify-content: space-between; }
+  .history h2 { font-size: 1.1rem; margin: 0; }
+  #history-clear { border: 0; background: none; color: var(--error); font: inherit; font-size: .85rem; cursor: pointer; padding: 4px 0; }
+  #history-clear[hidden], #history-empty[hidden] { display: none; }
+  .history-note { color: var(--muted); font-size: .85rem; margin: 4px 0 10px; }
+  #history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  #history-list li { display: flex; align-items: stretch; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  .h-item { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr; grid-template-areas: "tag time" "sum sum";
+    gap: 2px 8px; text-align: left; border: 0; background: none; color: var(--text); font: inherit; padding: 10px 12px; cursor: pointer; border-radius: 10px 0 0 10px; }
+  .h-item:hover { background: var(--accent-soft); }
+  .h-tag { grid-area: tag; font-size: .75rem; font-weight: 700; color: var(--accent); }
+  .h-time { grid-area: time; font-size: .75rem; color: var(--muted); text-align: right; }
+  .h-sum { grid-area: sum; font-size: .95rem; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .h-del { border: 0; background: none; color: var(--muted); font-size: 1.1rem; padding: 0 14px; cursor: pointer; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .suffix { display: flex; align-items: center; gap: 6px; }
   .suffix span { color: var(--muted); }
@@ -86,18 +101,36 @@
 <body>
 <main>
   <h1>比例計算</h1>
-  <p class="lead">濃縮調味料の換算や、比例式・比例配分・反比例をかんたんに計算できます。</p>
+  <p class="lead">比例式や、濃縮調味料の換算・希釈をかんたんに計算できます。</p>
 
   <div class="tabs" role="tablist">
-    <button role="tab" aria-selected="true" data-tab="dilute">濃縮換算</button>
+    <button role="tab" aria-selected="true" data-tab="ratio">比例式</button>
+    <button role="tab" aria-selected="false" data-tab="dilute">濃縮換算</button>
     <button role="tab" aria-selected="false" data-tab="water">希釈</button>
-    <button role="tab" aria-selected="false" data-tab="ratio">比例式</button>
     <button role="tab" aria-selected="false" data-tab="split">比例配分</button>
-    <button role="tab" aria-selected="false" data-tab="inverse">反比例</button>
   </div>
 
+  <!-- 比例式 -->
+  <section class="card" id="tab-ratio">
+    <p class="hint">A : B = C : D のうち、<strong>3つ</strong>を入力すると残りの1つを求めます。</p>
+    <div class="row ratio">
+      <input id="ra" inputmode="decimal" placeholder="A" aria-label="A">
+      <span class="op">:</span>
+      <input id="rb" inputmode="decimal" placeholder="B" aria-label="B">
+      <span class="op">=</span>
+      <input id="rc" inputmode="decimal" placeholder="C" aria-label="C">
+      <span class="op">:</span>
+      <input id="rd" inputmode="decimal" placeholder="D" aria-label="D">
+    </div>
+    <div class="actions">
+      <button class="primary" id="ratio-calc">計算する</button>
+      <button id="ratio-clear">クリア</button>
+    </div>
+    <div class="result" id="ratio-result" aria-live="polite"></div>
+  </section>
+
   <!-- 濃縮換算 -->
-  <section class="card" id="tab-dilute">
+  <section class="card" id="tab-dilute" hidden>
     <p class="hint">レシピと違う倍率の濃縮調味料（めんつゆ・白だしなど）を使うときの量を計算します。<br>（例：3倍濃縮 100ml のレシピを 5倍濃縮で作る）</p>
     <div class="grid2">
       <div class="field">
@@ -169,25 +202,6 @@
     <div class="result" id="water-result" aria-live="polite"></div>
   </section>
 
-  <!-- 比例式 -->
-  <section class="card" id="tab-ratio" hidden>
-    <p class="hint">A : B = C : D のうち、<strong>3つ</strong>を入力すると残りの1つを求めます。</p>
-    <div class="row ratio">
-      <input id="ra" inputmode="decimal" placeholder="A" aria-label="A">
-      <span class="op">:</span>
-      <input id="rb" inputmode="decimal" placeholder="B" aria-label="B">
-      <span class="op">=</span>
-      <input id="rc" inputmode="decimal" placeholder="C" aria-label="C">
-      <span class="op">:</span>
-      <input id="rd" inputmode="decimal" placeholder="D" aria-label="D">
-    </div>
-    <div class="actions">
-      <button class="primary" id="ratio-calc">計算する</button>
-      <button id="ratio-clear">クリア</button>
-    </div>
-    <div class="result" id="ratio-result" aria-live="polite"></div>
-  </section>
-
   <!-- 比例配分 -->
   <section class="card" id="tab-split" hidden>
     <p class="hint">合計を指定した比で分けます。（例：1200円を 2 : 3 : 5 で分ける）</p>
@@ -205,23 +219,14 @@
     <div class="result" id="split-result" aria-live="polite"></div>
   </section>
 
-  <!-- 反比例 -->
-  <section class="card" id="tab-inverse" hidden>
-    <p class="hint">x × y = 一定 のとき、x₁ × y₁ = x₂ × y₂ のうち<strong>3つ</strong>を入力すると残りを求めます。（例：4人で6日かかる仕事を3人でやると？）</p>
-    <div class="row ratio">
-      <input id="ix1" inputmode="decimal" placeholder="x₁" aria-label="x1">
-      <span class="op">×</span>
-      <input id="iy1" inputmode="decimal" placeholder="y₁" aria-label="y1">
-      <span class="op">=</span>
-      <input id="ix2" inputmode="decimal" placeholder="x₂" aria-label="x2">
-      <span class="op">×</span>
-      <input id="iy2" inputmode="decimal" placeholder="y₂" aria-label="y2">
+  <section class="history" aria-labelledby="history-title">
+    <div class="history-head">
+      <h2 id="history-title">計算履歴</h2>
+      <button id="history-clear">すべて消去</button>
     </div>
-    <div class="actions">
-      <button class="primary" id="inverse-calc">計算する</button>
-      <button id="inverse-clear">クリア</button>
-    </div>
-    <div class="result" id="inverse-result" aria-live="polite"></div>
+    <p class="history-note">この端末のブラウザに保存されます。タップすると計算を呼び出せます。</p>
+    <ol id="history-list"></ol>
+    <p id="history-empty" class="history-note">まだ履歴はありません。</p>
   </section>
 
   <div class="precision">
@@ -267,7 +272,7 @@
     });
   });
 
-  // ---- 4つの値のうち1つを解く（比例式・反比例共通） ----
+  // ---- 4つの値のうち1つを解く（比例式） ----
   function solveFour(ids, resultId, solver) {
     const res = $(resultId);
     ids.forEach(id => { if ($(id).classList.contains('solved')) { $(id).value = ''; $(id).classList.remove('solved'); } });
@@ -281,6 +286,8 @@
     input.value = fmt(out.value);
     input.classList.add('solved');
     showResult(res, `<div class="answer">${out.label} = ${fmt(out.value)}</div><div class="steps">${out.steps}</div>`);
+    const v = ids.map(id => $(id).value);
+    record('ratio', `${v[0]} : ${v[1]} = ${v[2]} : ${v[3]}（${out.label} = ${fmt(out.value)}）`);
   }
 
   // A : B = C : D  ⇔  A × D = B × C
@@ -301,25 +308,9 @@
     return { label: names[i], value, steps: '内項の積 = 外項の積 より\n' + steps };
   }
 
-  // x1 × y1 = x2 × y2
-  function inverseSolver(vals, i) {
-    const names = ['x₁', 'y₁', 'x₂', 'y₂'];
-    const pair = i < 2 ? [2, 3] : [0, 1];      // 既知のペア
-    const partner = i ^ 1;                     // 同じ辺のもう一方
-    if (vals[partner] === 0) return { error: `${names[partner]} が 0 のため計算できません。` };
-    const k = vals[pair[0]] * vals[pair[1]];
-    const value = k / vals[partner];
-    const steps = `比例定数 k = ${names[pair[0]]} × ${names[pair[1]]} = ${fmt(vals[pair[0]])} × ${fmt(vals[pair[1]])} = ${fmt(k)}\n`
-      + `${names[i]} = k ÷ ${names[partner]} = ${fmt(k)} ÷ ${fmt(vals[partner])}`;
-    return { label: names[i], value, steps };
-  }
-
   const ratioIds = ['ra', 'rb', 'rc', 'rd'];
-  const inverseIds = ['ix1', 'iy1', 'ix2', 'iy2'];
   $('ratio-calc').onclick = () => solveFour(ratioIds, 'ratio-result', ratioSolver);
   $('ratio-clear').onclick = () => clear(ratioIds, 'ratio-result');
-  $('inverse-calc').onclick = () => solveFour(inverseIds, 'inverse-result', inverseSolver);
-  $('inverse-clear').onclick = () => clear(inverseIds, 'inverse-result');
 
   // ---- 濃縮換算 ----
   // 原液に含まれる「濃さ」は 量 × 倍率 で一定 → 手持ちの量 = レシピの量 × レシピ倍率 ÷ 手持ち倍率
@@ -370,6 +361,11 @@
     if (diff !== 0) steps += `\n水の調整 = ${fmt(amt)} − ${fmt(own)} = ${fmt(diff)} ${u}（出来上がりの量と濃さをレシピに合わせる）`;
     if (newWater !== null && diff !== 0) steps += `\n水の量 = ${fmt(water)} ${diff >= 0 ? '+' : '−'} ${fmt(Math.abs(diff))} = ${fmt(newWater)} ${u}`;
     showResult(res, html + `<div class="steps">${steps}</div>`);
+    let w = '';
+    if (newWater !== null) w = `、水 ${fmt(Math.max(newWater, 0))}${u}`;
+    else if (diff > 0) w = `＋水 ${fmt(diff)}${u}`;
+    else if (diff < 0) w = `（水を ${fmt(-diff)}${u} 減らす）`;
+    record('dilute', `${fmt(rx)}倍 ${fmt(amt)}${u}${water !== null ? `・水 ${fmt(water)}${u}` : ''} → ${fmt(ox)}倍 ${fmt(own)}${u}${w}`);
   };
   $('dilute-clear').onclick = () => {
     ['d-recipe-x', 'd-own-x', 'd-amount', 'd-water'].forEach(id => $(id).value = '');
@@ -413,6 +409,7 @@
 <div class="answer">水：${fmt(water)} ${u}${spoonHint(water, u)}</div>
 <div class="answer">全量：${fmt(total)} ${u}</div>
 <div class="sub">${fmt(n)}倍濃縮 ＝ 原液 1 ： 水 ${fmt(n - 1)}</div><div class="steps">${steps}</div>`);
+    record('water', `${fmt(n)}倍：原液 ${fmt(conc)} ＋ 水 ${fmt(water)} ＝ 全量 ${fmt(total)} ${u}`);
   };
   $('water-clear').onclick = () => clear(waterIds, 'water-result');
 
@@ -451,6 +448,7 @@
     const body = rows.map(r =>
       `<tr><td>${escapeHtml(r.name)}（${fmt(r.ratio)}）</td><td>${fmt(total * r.ratio / sum)}</td></tr>`).join('');
     showResult(res, `<table>${body}</table><div class="steps">比の合計 = ${rows.map(r => fmt(r.ratio)).join(' + ')} = ${fmt(sum)}\n各値 = ${fmt(total)} × 比 ÷ ${fmt(sum)}</div>`);
+    record('split', `${fmt(total)} を ${rows.map(r => fmt(r.ratio)).join(' : ')} → ${rows.map(r => fmt(total * r.ratio / sum)).join(' / ')}`);
   };
   $('split-clear').onclick = () => {
     $('total').value = ''; parts.innerHTML = ''; addPart(); addPart();
@@ -460,6 +458,77 @@
   function escapeHtml(s) {
     return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+
+  // ---- 計算履歴（この端末のブラウザに保存） ----
+  const HISTORY_KEY = 'proportional-calc-history';
+  const HISTORY_MAX = 50;
+  const TAB_LABEL = { ratio: '比例式', dilute: '濃縮換算', water: '希釈', split: '比例配分' };
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch (e) { history = []; }
+  if (!Array.isArray(history)) history = [];
+  function saveHistory() {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (e) { /* 保存できない環境では表示のみ */ }
+  }
+  // 入力欄のうち、計算で埋めた欄以外を記録（呼び出し時に再計算できるように）
+  function snapshot(tab) {
+    const sec = $('tab-' + tab);
+    const fields = {};
+    sec.querySelectorAll('input[id], select[id]').forEach(el => {
+      if (!el.classList.contains('solved')) fields[el.id] = el.value;
+    });
+    const snap = { fields };
+    if (tab === 'split') {
+      snap.parts = [...parts.children].map(r => [r.querySelector('.pname').value, r.querySelector('.pratio').value]);
+    }
+    return snap;
+  }
+  function record(tab, summary) {
+    history = history.filter(h => !(h.tab === tab && h.summary === summary));
+    history.unshift({ tab, summary, time: Date.now(), ...snapshot(tab) });
+    history.length = Math.min(history.length, HISTORY_MAX);
+    saveHistory();
+    renderHistory();
+  }
+  function timeLabel(t) {
+    const d = new Date(t), now = new Date();
+    const hm = d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    return d.toDateString() === now.toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+  }
+  function renderHistory() {
+    const list = $('history-list');
+    list.innerHTML = history.map((h, i) => `<li>
+      <button class="h-item" data-i="${i}" title="この計算を呼び出す">
+        <span class="h-tag">${TAB_LABEL[h.tab] || ''}</span>
+        <span class="h-sum">${escapeHtml(h.summary)}</span>
+        <span class="h-time">${timeLabel(h.time)}</span>
+      </button>
+      <button class="h-del" data-i="${i}" aria-label="この履歴を削除" title="削除">×</button>
+    </li>`).join('');
+    $('history-empty').hidden = history.length > 0;
+    $('history-clear').hidden = history.length === 0;
+  }
+  function restore(h) {
+    if (!TAB_LABEL[h.tab]) return;
+    document.querySelector(`.tabs button[data-tab="${h.tab}"]`).click();
+    const sec = $('tab-' + h.tab);
+    sec.querySelectorAll('input[id]').forEach(el => { el.value = ''; el.classList.remove('solved'); });
+    if (h.tab === 'split') { parts.innerHTML = ''; (h.parts || []).forEach(p => addPart(p[0], p[1])); while (parts.children.length < 2) addPart(); }
+    Object.entries(h.fields || {}).forEach(([id, v]) => { const el = $(id); if (el && sec.contains(el)) el.value = v; });
+    sec.querySelector('.primary').click();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  $('history-list').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const i = Number(btn.dataset.i);
+    if (btn.classList.contains('h-del')) { history.splice(i, 1); saveHistory(); renderHistory(); }
+    else if (history[i]) restore(history[i]);
+  });
+  $('history-clear').onclick = () => {
+    if (!confirm('計算履歴をすべて消去しますか？')) return;
+    history = []; saveHistory(); renderHistory();
+  };
+  renderHistory();
 
   // Enter で計算
   document.addEventListener('keydown', e => {
