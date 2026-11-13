@@ -69,10 +69,15 @@
   .ratio { flex-wrap: nowrap; }
   .remove { border: 0; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }
   .add { margin-top: 8px; border: 1px dashed var(--line); background: none; color: var(--accent); padding: 8px; border-radius: 8px; font: inherit; cursor: pointer; width: 100%; }
+  .tabs { overflow-x: auto; scrollbar-width: none; }
+  .tabs button { flex: 1 0 auto; padding: 10px 6px; white-space: nowrap; }
+  .row.three { flex-wrap: nowrap; align-items: flex-end; }
+  .row.three .field { flex: 1; min-width: 0; margin-bottom: 0; }
+  .row.three .op { padding-bottom: 10px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .suffix { display: flex; align-items: center; gap: 6px; }
   .suffix span { color: var(--muted); }
-  select.unit { width: 100%; padding: 10px 12px; font: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+  select.unit { width: 100%; padding: 10px 12px; font: inherit; font-size: 1.1rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
   .result .sub { display: block; color: var(--muted); font-size: .85rem; font-weight: 400; }
   .precision { margin-top: 20px; font-size: .9rem; color: var(--muted); display: flex; align-items: center; gap: 8px; }
   .precision select { font: inherit; padding: 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
@@ -85,6 +90,7 @@
 
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="dilute">濃縮換算</button>
+    <button role="tab" aria-selected="false" data-tab="water">希釈</button>
     <button role="tab" aria-selected="false" data-tab="ratio">比例式</button>
     <button role="tab" aria-selected="false" data-tab="split">比例配分</button>
     <button role="tab" aria-selected="false" data-tab="inverse">反比例</button>
@@ -128,6 +134,39 @@
       <button id="dilute-clear">クリア</button>
     </div>
     <div class="result" id="dilute-result" aria-live="polite"></div>
+  </section>
+
+  <!-- 希釈 -->
+  <section class="card" id="tab-water" hidden>
+    <p class="hint">濃縮調味料を水で薄めるときの量を計算します。倍率と、<strong>原液・水・全量のどれか1つ</strong>を入力してください。<br>（例：3倍濃縮で全量 300ml 作るには？ → 原液 100ml ＋ 水 200ml）</p>
+    <div class="grid2">
+      <div class="field">
+        <label for="w-x">濃縮倍率</label>
+        <div class="suffix"><input id="w-x" inputmode="decimal" placeholder="例: 3"><span>倍</span></div>
+      </div>
+      <div class="field">
+        <label for="w-unit">単位</label>
+        <select id="w-unit" class="unit">
+          <option value="ml">ml</option>
+          <option value="大さじ">大さじ</option>
+          <option value="小さじ">小さじ</option>
+          <option value="カップ">カップ</option>
+          <option value="g">g</option>
+        </select>
+      </div>
+    </div>
+    <div class="row three">
+      <div class="field"><label for="w-conc">原液</label><input id="w-conc" inputmode="decimal" placeholder="原液"></div>
+      <span class="op">＋</span>
+      <div class="field"><label for="w-water">水</label><input id="w-water" inputmode="decimal" placeholder="水"></div>
+      <span class="op">＝</span>
+      <div class="field"><label for="w-total">全量</label><input id="w-total" inputmode="decimal" placeholder="全量"></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="water-calc">計算する</button>
+      <button id="water-clear">クリア</button>
+    </div>
+    <div class="result" id="water-result" aria-live="polite"></div>
   </section>
 
   <!-- 比例式 -->
@@ -336,6 +375,46 @@
     ['d-recipe-x', 'd-own-x', 'd-amount', 'd-water'].forEach(id => $(id).value = '');
     $('dilute-result').textContent = ''; $('d-recipe-x').focus();
   };
+
+  // ---- 希釈 ----
+  // N倍濃縮：全量 = 原液 × N、水 = 原液 × (N − 1)
+  function spoonHint(v, u) {
+    if (!(u in ML) || v <= 0 || v * ML[u] > 60) return '';
+    const s = spoons(v * ML[u]);
+    return s === `${u}${fmt(v)}` ? '' : ` <span class="sub">（約 ${s}）</span>`;
+  }
+  const waterIds = ['w-conc', 'w-water', 'w-total'];
+  $('water-calc').onclick = () => {
+    const res = $('water-result');
+    waterIds.forEach(id => { if ($(id).classList.contains('solved')) { $(id).value = ''; $(id).classList.remove('solved'); } });
+    const n = parse($('w-x').value);
+    const [c, w, t] = waterIds.map(id => parse($(id).value));
+    const u = $('w-unit').value;
+    if (n === null) return showError(res, '濃縮倍率を入力してください。');
+    if ([n, c, w, t].some(v => Number.isNaN(v))) return showError(res, '数値として読み取れない入力があります。');
+    if (n < 1) return showError(res, '濃縮倍率は1以上の数値を入力してください。（ストレートは 1倍）');
+    const filled = [c, w, t].filter(v => v !== null).length;
+    if (filled !== 1) return showError(res, '原液・水・全量のうち、どれか1つだけを入力してください。');
+    if ([c, w, t].some(v => v !== null && v < 0)) return showError(res, '量には0以上の数値を入力してください。');
+    if (w !== null && n === 1) return showError(res, 'ストレート（1倍）は水で薄めないため、水の量から原液は求められません。');
+
+    let conc, steps;
+    if (c !== null) { conc = c; steps = `原液 = ${fmt(c)} ${u}`; }
+    else if (w !== null) { conc = w / (n - 1); steps = `原液 = 水 ÷ (倍率 − 1) = ${fmt(w)} ÷ ${fmt(n - 1)} = ${fmt(conc)} ${u}`; }
+    else { conc = t / n; steps = `原液 = 全量 ÷ 倍率 = ${fmt(t)} ÷ ${fmt(n)} = ${fmt(conc)} ${u}`; }
+    const water = conc * (n - 1), total = conc * n;
+    if (c !== null || t !== null) steps += `\n水 = 原液 × (倍率 − 1) = ${fmt(conc)} × ${fmt(n - 1)} = ${fmt(water)} ${u}`;
+    if (c !== null || w !== null) steps += `\n全量 = 原液 × 倍率 = ${fmt(conc)} × ${fmt(n)} = ${fmt(total)} ${u}`;
+
+    [[c, 'w-conc', conc], [w, 'w-water', water], [t, 'w-total', total]].forEach(([given, id, v]) => {
+      if (given === null) { $(id).value = fmt(v); $(id).classList.add('solved'); }
+    });
+    showResult(res, `<div class="answer">原液：${fmt(conc)} ${u}${spoonHint(conc, u)}</div>
+<div class="answer">水：${fmt(water)} ${u}${spoonHint(water, u)}</div>
+<div class="answer">全量：${fmt(total)} ${u}</div>
+<div class="sub">${fmt(n)}倍濃縮 ＝ 原液 1 ： 水 ${fmt(n - 1)}</div><div class="steps">${steps}</div>`);
+  };
+  $('water-clear').onclick = () => clear(waterIds, 'water-result');
 
   // ---- 比例配分 ----
   const parts = $('parts');
