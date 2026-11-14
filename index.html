@@ -101,10 +101,11 @@
 <body>
 <main>
   <h1>比例計算</h1>
-  <p class="lead">比例式や、濃縮調味料の換算・希釈をかんたんに計算できます。</p>
+  <p class="lead">比例式や塩分・糖分の％、濃縮調味料の換算・希釈をかんたんに計算できます。</p>
 
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="ratio">比例式</button>
+    <button role="tab" aria-selected="false" data-tab="percent">％計算</button>
     <button role="tab" aria-selected="false" data-tab="dilute">濃縮換算</button>
     <button role="tab" aria-selected="false" data-tab="water">希釈</button>
     <button role="tab" aria-selected="false" data-tab="split">比例配分</button>
@@ -127,6 +128,31 @@
       <button id="ratio-clear">クリア</button>
     </div>
     <div class="result" id="ratio-result" aria-live="polite"></div>
+  </section>
+
+  <!-- ％計算 -->
+  <section class="card" id="tab-percent" hidden>
+    <p class="hint">塩分・糖分などの割合を計算します。<strong>3つのうち2つ</strong>を入力すると残りを求めます。<br>（例：肉 500g の 0.8% の塩は？ → 4g）</p>
+    <div class="row three">
+      <div class="field"><label for="p-base">全体の重さ</label><div class="suffix"><input id="p-base" inputmode="decimal" placeholder="例: 500"><span>g</span></div></div>
+      <span class="op">×</span>
+      <div class="field"><label for="p-rate">割合</label><div class="suffix"><input id="p-rate" inputmode="decimal" placeholder="例: 0.8"><span>%</span></div></div>
+      <span class="op">＝</span>
+      <div class="field"><label for="p-part">量</label><div class="suffix"><input id="p-part" inputmode="decimal" placeholder="?"><span>g</span></div></div>
+    </div>
+    <div class="field" style="margin-top:14px">
+      <label for="p-kind">計量スプーンの目安</label>
+      <select id="p-kind" class="unit">
+        <option value="salt">塩（小さじ1 = 6g）</option>
+        <option value="sugar">砂糖（小さじ1 = 3g）</option>
+        <option value="none">表示しない</option>
+      </select>
+    </div>
+    <div class="actions">
+      <button class="primary" id="percent-calc">計算する</button>
+      <button id="percent-clear">クリア</button>
+    </div>
+    <div class="result" id="percent-result" aria-live="polite"></div>
   </section>
 
   <!-- 濃縮換算 -->
@@ -322,7 +348,10 @@
     const tsp = Math.round((ml - tbsp * 15) / 5 * 2) / 2;   // 小さじ 1/2 単位
     const parts = [];
     if (tbsp) parts.push(`大さじ${tbsp}`);
-    if (tsp) parts.push(`小さじ${tsp}`);
+    if (tsp) {
+      const whole = Math.floor(tsp), half = tsp % 1 ? '1/2' : '';
+      parts.push('小さじ' + (whole && half ? `${whole}と1/2` : whole ? `${whole}` : half));
+    }
     return parts.length ? parts.join(' + ') : '少々';
   }
   $('dilute-calc').onclick = () => {
@@ -371,6 +400,47 @@
     ['d-recipe-x', 'd-own-x', 'd-amount', 'd-water'].forEach(id => $(id).value = '');
     $('dilute-result').textContent = ''; $('d-recipe-x').focus();
   };
+
+  // ---- ％計算 ----
+  // 量 = 全体 × 割合 ÷ 100
+  const percentIds = ['p-base', 'p-rate', 'p-part'];
+  const G_PER_TSP = { salt: 6, sugar: 3 };   // 小さじ1杯あたりのグラム（精製塩・上白糖の目安）
+  $('percent-calc').onclick = () => {
+    const res = $('percent-result');
+    percentIds.forEach(id => { if ($(id).classList.contains('solved')) { $(id).value = ''; $(id).classList.remove('solved'); } });
+    const [base, rate, part] = percentIds.map(id => parse($(id).value));
+    if ([base, rate, part].some(v => Number.isNaN(v))) return showError(res, '数値として読み取れない入力があります。');
+    if ([base, rate, part].filter(v => v !== null).length !== 2) return showError(res, '3つのうち、ちょうど2つを入力して1つを空欄にしてください。');
+    if ([base, rate, part].some(v => v !== null && v < 0)) return showError(res, '0以上の数値を入力してください。');
+
+    let label, value, unit, steps;
+    if (part === null) {
+      value = base * rate / 100; label = '量'; unit = 'g';
+      steps = `量 = ${fmt(base)} × ${fmt(rate)} ÷ 100 = ${fmt(value)} g`;
+    } else if (rate === null) {
+      if (base === 0) return showError(res, '全体の重さが 0 のため計算できません。');
+      value = part / base * 100; label = '割合'; unit = '%';
+      steps = `割合 = ${fmt(part)} ÷ ${fmt(base)} × 100 = ${fmt(value)} %`;
+    } else {
+      if (rate === 0) return showError(res, '割合が 0 のため計算できません。');
+      value = part / rate * 100; label = '全体の重さ'; unit = 'g';
+      steps = `全体 = ${fmt(part)} ÷ ${fmt(rate)} × 100 = ${fmt(value)} g`;
+    }
+    const idx = [base, rate, part].indexOf(null);
+    $(percentIds[idx]).value = fmt(value);
+    $(percentIds[idx]).classList.add('solved');
+
+    const g = part === null ? value : part;
+    const kind = $('p-kind').value;
+    let spoon = '';
+    if (kind in G_PER_TSP && g > 0 && g <= 60) {
+      spoon = `<span class="sub">${kind === 'salt' ? '塩' : '砂糖'} ${fmt(g)} g ≒ ${spoons(g / G_PER_TSP[kind] * 5)}</span>`;
+    }
+    showResult(res, `<div class="answer">${label}：${fmt(value)} ${unit}</div>${spoon}<div class="steps">${steps}</div>`);
+    const b = idx === 0 ? value : base, r = idx === 1 ? value : rate, pt = idx === 2 ? value : part;
+    record('percent', `${fmt(b)}g の ${fmt(r)}% ＝ ${fmt(pt)}g（${label}を計算）`);
+  };
+  $('percent-clear').onclick = () => clear(percentIds, 'percent-result');
 
   // ---- 希釈 ----
   // N倍濃縮：全量 = 原液 × N、水 = 原液 × (N − 1)
@@ -462,7 +532,7 @@
   // ---- 計算履歴（この端末のブラウザに保存） ----
   const HISTORY_KEY = 'proportional-calc-history';
   const HISTORY_MAX = 50;
-  const TAB_LABEL = { ratio: '比例式', dilute: '濃縮換算', water: '希釈', split: '比例配分' };
+  const TAB_LABEL = { ratio: '比例式', percent: '％計算', dilute: '濃縮換算', water: '希釈', split: '比例配分' };
   let history = [];
   try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch (e) { history = []; }
   if (!Array.isArray(history)) history = [];
