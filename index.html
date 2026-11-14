@@ -79,6 +79,7 @@
   .history h2 { font-size: 1.1rem; margin: 0; }
   #history-clear { border: 0; background: none; color: var(--error); font: inherit; font-size: .85rem; cursor: pointer; padding: 4px 0; }
   #history-clear[hidden], #history-empty[hidden] { display: none; }
+  #history-clear.armed { background: var(--error); color: #fff; padding: 4px 10px; border-radius: 6px; font-weight: 700; }
   .history-note { color: var(--muted); font-size: .85rem; margin: 4px 0 10px; }
   #history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   #history-list li { display: flex; align-items: stretch; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
@@ -594,8 +595,21 @@
     if (btn.classList.contains('h-del')) { history.splice(i, 1); saveHistory(); renderHistory(); }
     else if (history[i]) restore(history[i]);
   });
+  // 確認ダイアログ（confirm）は埋め込み表示などで出ないことがあるため、2回押しで確認する
+  let clearTimer = null;
+  function resetClearButton() {
+    clearTimeout(clearTimer); clearTimer = null;
+    $('history-clear').textContent = 'すべて消去';
+    $('history-clear').classList.remove('armed');
+  }
   $('history-clear').onclick = () => {
-    if (!confirm('計算履歴をすべて消去しますか？')) return;
+    if (!clearTimer) {
+      $('history-clear').textContent = 'もう一度押すと消去';
+      $('history-clear').classList.add('armed');
+      clearTimer = setTimeout(resetClearButton, 4000);
+      return;
+    }
+    resetClearButton();
     history = []; saveHistory(); renderHistory();
   };
   renderHistory();
